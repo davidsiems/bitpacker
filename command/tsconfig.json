@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "target": "esnext",
+        "module": "esnext",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "moduleResolution": "node",
+        "forceConsistentCasingInFileNames": true,
+        "paths": {
+            "bitburner": ["./types/bitburner"]
+        },
+        "rootDir": "./src",
+        "outDir": "./dist"
+    },
+    "exclude": ["node_modules"]
+}

@@ -1,0 +1,22 @@
+{
+    "name": "spd",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "build": "tsc"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/davidsiems/speed-daemon.git"
+    },
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/davidsiems/speed-daemon/issues"
+    },
+    "homepage": "https://github.com/davidsiems/speed-daemon#readme",
+    "devDependencies": {
+        "typescript": "^4.5.4"
+    }
+}

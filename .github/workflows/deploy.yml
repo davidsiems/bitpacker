@@ -1,0 +1,21 @@
+name: Deploy to Firebase Hosting on merge
+"on":
+    push:
+        branches:
+            - live
+jobs:
+    build_and_deploy:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - name: Install npm packages
+              run: |
+                  cd firebase/functions
+                  npm install
+            - name: Deploy to Firebase
+              uses: w9jds/firebase-action@master
+              with:
+                  args: deploy
+              env:
+                  FIREBASE_TOKEN: "${{ secrets.FIREBASE_TOKEN }}"
+                  PROJECT_PATH: "./website"
