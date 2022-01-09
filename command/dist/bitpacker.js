@@ -11,19 +11,23 @@ export async function main(ns) {
     var command = flags._[0];
     switch (command) {
         case 'install':
+            CheckRunning(ns, options);
             var latest = flags._[1] === 'latest';
             await BitpackInstall(ns, options, latest);
             break;
         case 'cleanslate':
+            CheckRunning(ns, options);
             await BitpackCleanslate(ns, options);
             break;
         case 'add': {
+            CheckRunning(ns, options);
             var bitpack = flags._[1];
             var version = flags._[2];
             await BitpackAdd(ns, options, bitpack, version);
             break;
         }
         case 'remove': {
+            CheckRunning(ns, options);
             var bitpack = flags._[1];
             await BitpackRemove(ns, options, bitpack);
             break;
@@ -55,8 +59,7 @@ export async function main(ns) {
     }
 }
 export async function BitpackInstall(ns, options, latest) {
-    CheckRunning(ns, options);
-    DeleteAllBitpacks(ns);
+    DeleteAllBitpacks(ns, options);
     var failures = 0;
     var packages = 0;
     var manifest = LoadManifest(ns);
@@ -91,12 +94,10 @@ export function BitpackIsInstalled(ns, options, bitpack) {
     return false;
 }
 export async function BitpackCleanslate(ns, options) {
-    CheckRunning(ns, options);
-    DeleteAllBitpacks(ns);
+    DeleteAllBitpacks(ns, options);
     await CreateManifest(ns);
 }
 async function BitpackAdd(ns, options, bitpack, version) {
-    CheckRunning(ns, options);
     if (!version)
         version = 'latest';
     var manifest = LoadManifest(ns);
@@ -118,7 +119,6 @@ async function BitpackAdd(ns, options, bitpack, version) {
     return true;
 }
 async function BitpackRemove(ns, options, bitpack) {
-    CheckRunning(ns, options);
     var manifest = await RequireManifest(ns);
     if (!manifest)
         return;
@@ -149,8 +149,8 @@ async function Create(ns, options, packagePath, bitpackName) {
     for (var file of filesInPath) {
         if (!file.startsWith(packagePath))
             continue;
-        if (file.endsWith('bitpack.txt')) {
-            PrintError(ns, `bitpack.txt already exists. Aborting package creation.`);
+        if (file.endsWith('package.txt')) {
+            PrintError(ns, `package.txt already exists. Aborting package creation.`);
             return false;
         }
     }
@@ -195,25 +195,34 @@ async function Create(ns, options, packagePath, bitpackName) {
     }
     var bitpack = {
         uniqueName: bitpackName,
+        author: '',
+        descriptiveName: '',
         shortDescription: '',
+        longDescription: '',
         tags: [],
         publishKey: key
     };
-    await ns.write(`${packagePath}/bitpack.txt`, JSON.stringify(bitpack, undefined, 4));
+    await ns.write(`${packagePath}package.txt`, JSON.stringify(bitpack, undefined, 4));
     Print(ns, options, `Successfully created ${bitpackName}.
-Your publishing key is ${key} and has been saved into your local bitpack.txt.
+
+Your publishing key is ${key} and has been saved into your local package.txt.
 Consider backing it up elsewhere and don't share it with anyone you don't want to be able to publish your package.
-Develop your package and then publish using the 'bp publish' command.`);
+Develop your package and then publish using the 'bp publish' command.
+`);
     return true;
 }
 async function Publish(ns, options, packagePath) {
+    if (!packagePath.startsWith('/'))
+        packagePath = `/${packagePath}`;
+    if (!packagePath.endsWith('/'))
+        packagePath = `${packagePath}/`;
     if (packagePath.startsWith('/bitpacks') || packagePath.startsWith('bitpacks')) {
         PrintError(ns, `Publish aborted. Can't publish from the /bitpacks directory.`);
         return false;
     }
-    var packMetadata = LoadBitpackMetadata(ns, packagePath);
+    var packMetadata = LoadMetadata(ns, `${packagePath}package.txt`);
     if (packMetadata === null) {
-        PrintError(ns, `Publish aborted. Invalid bitpack.txt`);
+        PrintError(ns, `Publish aborted. Invalid package.txt`);
         return false;
     }
     var publishKey = packMetadata.publishKey;
@@ -225,7 +234,14 @@ async function Publish(ns, options, packagePath) {
     var packFilenames = ns.ls(ns.getHostname(), packagePath);
     var packFiles = {};
     for (var filename of packFilenames) {
+        if (!filename.startsWith(packagePath))
+            continue;
         var fileData = ns.read(filename);
+        if (filename === `${packagePath}package.txt`) {
+            var metadata = JSON.parse(fileData);
+            delete metadata.publishKey;
+            fileData = JSON.stringify(metadata, undefined, 4);
+        }
         packFiles[filename.replace(packagePath, '')] = fileData;
     }
     var pack = {
@@ -324,21 +340,27 @@ async function DownloadBitpack(ns, options, bitpack, version) {
 function DeleteBitpack(ns, options, bitpack) {
     var files = ns.ls(ns.getHostname(), `/bitpacks/${bitpack}`);
     for (var file of files) {
+        if (!file.startsWith(`/bitpacks/${bitpack}`))
+            continue;
         if (options.verbose)
             Print(ns, options, `Deleting ${file}`);
         ns.rm(file);
     }
 }
-function DeleteAllBitpacks(ns) {
-    var files = ns.ls(ns.getHostname(), '/bitpack');
+function DeleteAllBitpacks(ns, options) {
+    var files = ns.ls(ns.getHostname(), '/bitpacks/');
     for (var file of files) {
+        if (!file.startsWith('/bitpacks/'))
+            continue;
         if (file.startsWith(`/bitpacks/bitpacker.js`))
             continue;
+        if (options.verbose)
+            Print(ns, options, `Deleting ${file}`);
         ns.rm(file);
     }
 }
 function LoadManifest(ns) {
-    var manifestJSON = ns.read('bitman.txt');
+    var manifestJSON = ns.read('packages.txt');
     if (manifestJSON === '')
         return undefined;
     var manifest = null;
@@ -346,7 +368,7 @@ function LoadManifest(ns) {
         manifest = JSON.parse(manifestJSON);
     }
     catch (syntaxError) {
-        PrintError(ns, `Couldn't parse bitman.txt\n\n${syntaxError}`);
+        PrintError(ns, `Couldn't parse packages.txt\n\n${syntaxError}`);
     }
     return manifest;
 }
@@ -359,12 +381,12 @@ async function CreateManifest(ns) {
 }
 async function SaveManifest(ns, manifest) {
     var manifestJSON = JSON.stringify(manifest, undefined, 4);
-    await ns.write('bitman.txt', manifestJSON, 'w');
+    await ns.write('packages.txt', manifestJSON, 'w');
 }
 async function RequireManifest(ns) {
     var manifest = LoadManifest(ns);
     if (!manifest)
-        PrintError(ns, `bitpack.txt not found`);
+        PrintError(ns, `package.txt not found`);
     return manifest;
 }
 function LoadMetadata(ns, path) {
@@ -376,14 +398,10 @@ function LoadMetadata(ns, path) {
         metadata = JSON.parse(metadataJSON);
     }
     catch (syntaxError) {
-        PrintError(ns, `Couldn't parse bitpack.txt:\n\n${syntaxError}`);
+        PrintError(ns, `Couldn't parse package.txt:\n\n${syntaxError}`);
         return null;
     }
     return metadata;
-}
-function LoadBitpackMetadata(ns, bitpack) {
-    var path = `/bitpacks/${bitpack}/bitpack.txt`;
-    return LoadMetadata(ns, path);
 }
 function CheckRunning(ns, options) {
     var running = ns.ps();

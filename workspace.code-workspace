@@ -1,0 +1,15 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.exclude": {
+            "command/node_modules": true,
+            "firebase/node_modules": true,
+            "firebase/functions/lib": true,
+            "firebase/functions/node_modules": true
+        }
+    }
+}
