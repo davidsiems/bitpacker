@@ -6,6 +6,7 @@ wget "ht<span/>tps://raw.githubusercontent.com/davidsiems/bitpacker/live/command
 
 ## get started:
 
+    bp browse                    // lists packages on the registry
     bp add some-cool-package     // adds some-cool-package
     bp remove some-cool-package  // removes some-cool-package
     bp list                      // lists installed packages and their versions
