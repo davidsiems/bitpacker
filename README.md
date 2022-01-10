@@ -11,7 +11,7 @@ wget "ht<span/>tps://raw.githubusercontent.com/davidsiems/bitpacker/live/command
     bp remove some-cool-package  // removes some-cool-package
     bp list                      // lists installed packages and their versions
     bp install                   // makes /bitpacks reflect what's in the manifest (packages.txt)
-    bp cleanslate                // uninstalls all packages and resets bitman.txt
+    bp cleanslate                // uninstalls all packages and resets packages.txt
 
 ## develop a package:
 
