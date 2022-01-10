@@ -1,6 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { v4 as uuidv4 } from "uuid";
+import * as yup from "yup";
 
 admin.initializeApp();
 var firestore = admin.firestore();
@@ -9,7 +10,7 @@ interface BitpackMetadata {
     uniqueName: string;
     shortDescription: string;
     tags: string[];
-    version: number;
+    version?: number;
     publishKey?: string;
 
     author?: string;
@@ -17,11 +18,95 @@ interface BitpackMetadata {
     longDescription?: string;
 }
 
+var BitpackTags: string[] = [
+    "os",
+    "utility",
+    "fun",
+    "ui",
+    "qol",
+    "library",
+    "terminal",
+    "ns2",
+    "ns1",
+];
+
+var PublishRequestSchema = yup.object().shape({
+    metadata: yup
+        .object()
+        .shape({
+            uniqueName: yup
+                .string()
+                .min(2, "uniqueName must be at least 2 characters.")
+                .max(64, "uniqueName cannot be longer than 64 characters.")
+                .required("Missing uniqueName field."),
+            shortDescription: yup
+                .string()
+                .min(1, "shortDescription must be at least 1 character.")
+                .max(
+                    120,
+                    "Short description cannot be longer than 120 characters."
+                )
+                .required("Missing shortDescription field."),
+            tags: yup
+                .array()
+                .of(yup.string().oneOf([...BitpackTags]))
+                .required("Missing tags field."),
+            author: yup
+                .string()
+                .max(64, "author cannot be longer than 64 characters.")
+                .optional(),
+            descriptiveName: yup
+                .string()
+                .max(64, "descriptiveName cannot be longer than 64 characters.")
+                .optional(),
+            longDescription: yup
+                .string()
+                .max(
+                    512,
+                    "longDescription cannot be longer than 512 characters."
+                )
+                .optional(),
+        })
+        .required("Missing metadata field."),
+    files: yup.lazy((value) => {
+        var schema = yup.object().required("Missing files field");
+        switch (typeof value) {
+            case "object": {
+                for (var key in value) {
+                    if (typeof key !== "string") continue;
+                    if (
+                        !key.endsWith(".txt") &&
+                        !key.endsWith(".script") &&
+                        !key.endsWith(".js") &&
+                        !key.endsWith(".ns")
+                    )
+                        continue;
+
+                    var field: any = {};
+                    field[key] = yup.string().required();
+                    schema = schema.shape(field);
+                }
+                break;
+            }
+        }
+        return schema;
+    }),
+    key: yup.string().required(),
+});
+
 interface BitpackPublishRequest {
     metadata: BitpackMetadata;
     files: Record<string, string>;
     key: string;
 }
+
+var CreateRequestSchema = yup.object().shape({
+    bitpack: yup
+        .string()
+        .min(2, "bitpack must be at least 2 characters.")
+        .max(64, "bitpack cannot be longer than 64 characters.")
+        .required("Missing bitpack field"),
+});
 
 interface BitpackCreateRequest {
     bitpack: string;
@@ -32,12 +117,28 @@ interface BitpackManifest {
     nextVersion: number;
 }
 
+interface BitpackRegistry {
+    uniqueName: string;
+    shortDescription: string;
+    author?: string;
+    tags: string[];
+}
+
 export const UploadPackage = functions
     .runWith({
         memory: "128MB",
     })
     .https.onRequest(async (request, response) => {
-        var payload = request.body as BitpackPublishRequest;
+        var payload: BitpackPublishRequest;
+        try {
+            payload = (await PublishRequestSchema.validate(request.body, {
+                stripUnknown: true,
+            })) as BitpackPublishRequest;
+        } catch (error) {
+            response.send({ error: (error as any).message });
+            return;
+        }
+
         var manifestCollection = firestore.collection("bitpack-manifests");
         var manifestDocRef = manifestCollection.doc(
             payload.metadata.uniqueName
@@ -57,6 +158,11 @@ export const UploadPackage = functions
             });
             return;
         }
+
+        var registryCollection = firestore.collection("bitpack-registry");
+        var registryDocRef = registryCollection.doc(
+            payload.metadata.uniqueName
+        );
 
         var version = await firestore.runTransaction(async (t) => {
             var manifestDoc = await t.get(manifestDocRef);
@@ -84,6 +190,14 @@ export const UploadPackage = functions
                 nextVersion: nextVersion,
             });
 
+            var registry: BitpackRegistry = {
+                uniqueName: payload.metadata.uniqueName,
+                shortDescription: payload.metadata.shortDescription,
+                author: payload.metadata.author,
+                tags: payload.metadata.tags,
+            };
+            t.set(registryDocRef, registry);
+
             return publishedVersion;
         });
 
@@ -95,7 +209,16 @@ export const CreatePackage = functions
         memory: "128MB",
     })
     .https.onRequest(async (request, response) => {
-        var payload = request.body as BitpackCreateRequest;
+        var payload: BitpackCreateRequest;
+        try {
+            payload = (await CreateRequestSchema.validate(request.body, {
+                stripUnknown: true,
+            })) as BitpackCreateRequest;
+        } catch (error) {
+            response.send({ error: (error as any).message });
+            return;
+        }
+
         var manifestCollection = firestore.collection("bitpack-manifests");
         var manifestDocRef = manifestCollection.doc(payload.bitpack);
 

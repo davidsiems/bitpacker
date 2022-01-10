@@ -1,62 +1,157 @@
-var useDev = false;
-var baseDevURL = 'http://localhost:4001/bit-packer/us-central1';
+var useDev = true;
+var baseDevURL = 'http://localhost:5001/bit-packer/us-central1';
 var baseLiveURL = 'https://us-central1-bit-packer.cloudfunctions.net';
 var UploadPackageURL = `${useDev ? baseDevURL : baseLiveURL}/UploadPackage`;
 var CreatePackageURL = `${useDev ? baseDevURL : baseLiveURL}/CreatePackage`;
-export async function main(ns) {
-    var flags = ns.flags([['quiet', false]]);
-    var options = {
-        quiet: flags.quiet
-    };
-    var command = flags._[0];
-    switch (command) {
-        case 'install':
-            CheckRunning(ns, options);
-            var latest = flags._[1] === 'latest';
-            await BitpackInstall(ns, options, latest);
-            break;
-        case 'cleanslate':
-            CheckRunning(ns, options);
-            await BitpackCleanslate(ns, options);
-            break;
-        case 'add': {
-            CheckRunning(ns, options);
-            var bitpack = flags._[1];
-            var version = flags._[2];
-            await BitpackAdd(ns, options, bitpack, version);
-            break;
+var BitpackerURL = `https://raw.githubusercontent.com/davidsiems/bitpacker/live/command/dist/bp.js?${Date.now()}`;
+var Commands = {
+    browse: {
+        command: browse,
+        help: `    bp browse                                // Lists available packages and their details`,
+        validate: (args) => true
+    },
+    add: {
+        command: add,
+        help: `    bp add package-name                      // Installs latest version of the package 'package-name'
+    bp add package-name version              // Installs the specified version of 'package-name'`,
+        validate: (args) => {
+            if (args.length === 0 || args.length > 2)
+                return false;
+            return true;
         }
-        case 'remove': {
-            CheckRunning(ns, options);
-            var bitpack = flags._[1];
-            await BitpackRemove(ns, options, bitpack);
-            break;
+    },
+    remove: {
+        command: remove,
+        help: `    bp remove package-name                   // Removes the specified package`,
+        validate: (args) => {
+            if (args.length == 0 || args.length > 1)
+                return false;
+            return true;
         }
-        case 'list': {
-            await List(ns, options);
-            break;
+    },
+    man: {
+        command: man,
+        help: `    bp man package-name                      // Prints out manual.txt for the specified package (if it exists)`,
+        validate: (args) => {
+            return args.length === 1;
         }
-        case 'create': {
-            var packagePath = flags._[1];
-            var bitpackName = flags._[2];
-            await Create(ns, options, packagePath, bitpackName);
-            break;
+    },
+    install: {
+        command: install,
+        help: `    bp install                               // Installs versions specified in packages.txt
+    bp install latest                        // Updates packages to latest versions`,
+        validate: (args) => {
+            return args.length === 0 || (args.length === 1 && args[0] === 'latest');
         }
-        case 'publish': {
-            var packagePath = flags._[1];
-            var key = flags._[2];
-            await Publish(ns, options, packagePath);
-            break;
+    },
+    cleanslate: {
+        command: cleanslate,
+        help: `    bp cleanslate                            // Removes all installed packages and clears packages.txt`,
+        validate: (args) => {
+            return args.length === 0;
         }
-        case 'help': {
-            break;
+    },
+    list: {
+        command: list,
+        help: `    bp list                                  // Lists installed packages and their versions`,
+        validate: (args) => {
+            return args.length === 0;
         }
-        case 'man': {
-            var bitpack = flags._[1];
-            Manual(ns, options, bitpack);
-            break;
+    },
+    create: {
+        command: create,
+        help: `    bp create /path/to/package package-name  // Creates and registers a new package`,
+        validate: (args) => {
+            return args.length === 2;
         }
+    },
+    publish: {
+        command: publish,
+        help: `    bp publish /path/to/package              // Publishes a package to the registry`,
+        validate: (args) => {
+            return args.length === 1;
+        }
+    },
+    'update-bp': {
+        command: update_bp,
+        help: `    bp update-bp                             // Updates bitpacker to latest`,
+        validate: (args) => {
+            return args.length === 0;
+        }
+    },
+    help: {
+        command: help,
+        help: `    bp help                                  // Displays this help text`,
+        validate: (args) => true
     }
+};
+export async function main(ns) {
+    var flags = ns.flags([
+        ['quiet', false],
+        ['q', false]
+    ]);
+    var options = {
+        quiet: flags.quiet || flags.q
+    };
+    await CheckUpdate(ns, options);
+    var [commandKey, ...args] = flags._;
+    var command = Commands[commandKey];
+    if (!command)
+        command = Commands.help;
+    if (!command.validate(args))
+        command = Commands.help;
+    await command.command(ns, options, args);
+}
+async function update_bp(ns, options, args) {
+    await ns.wget(BitpackerURL, '/bitpacks/bp.js');
+    Print(ns, options, 'Updated Bitpacker to latest');
+}
+async function install(ns, options, args) {
+    CheckRunning(ns, options);
+    var latest = args[0] === 'latest';
+    await BitpackInstall(ns, options, latest);
+}
+async function cleanslate(ns, options, args) {
+    CheckRunning(ns, options);
+    await BitpackCleanslate(ns, options);
+}
+async function add(ns, options, args) {
+    CheckRunning(ns, options);
+    var bitpack = args[0];
+    var version = args[1];
+    await BitpackAdd(ns, options, bitpack, version);
+}
+async function remove(ns, options, args) {
+    CheckRunning(ns, options);
+    var bitpack = args[0];
+    await BitpackRemove(ns, options, bitpack);
+}
+async function list(ns, options, args) {
+    await List(ns, options);
+}
+async function create(ns, options, args) {
+    var packagePath = args[0];
+    var bitpackName = args[1];
+    await Create(ns, options, packagePath, bitpackName);
+}
+async function publish(ns, options, args) {
+    var packagePath = args[0];
+    await Publish(ns, options, packagePath);
+}
+async function man(ns, options, args) {
+    var bitpack = args[0];
+    Manual(ns, options, bitpack);
+}
+async function browse(ns, options, args) {
+    await ListBitpacks(ns, options);
+}
+async function help(ns, options, args) {
+    var output = '\nBitpacker - a simple package manager for Bitburner\n';
+    output += '    flags:\n        -q --quiet, Run with reduced output\n\n';
+    for (var commandName in Commands) {
+        output += `${Commands[commandName].help}\n`;
+    }
+    Print(ns, options, output);
 }
 export async function BitpackInstall(ns, options, latest) {
     DeleteAllBitpacks(ns, options);
@@ -242,7 +337,13 @@ async function Publish(ns, options, packagePath) {
             delete metadata.publishKey;
             fileData = JSON.stringify(metadata, undefined, 4);
         }
-        packFiles[filename.replace(packagePath, '')] = fileData;
+        var packagePathNoLeadingSlash = packagePath.startsWith('/') ? packagePath.slice(1) : packagePath;
+        var regexString = `^import(.*)from\\s*['|"]\/*${packagePathNoLeadingSlash}(.*)['|"]$`;
+        var regex = RegExp(regexString, 'gm');
+        if (filename.endsWith('.js') || filename.endsWith('.ns') || filename.endsWith('.script')) {
+            fileData = fileData.replaceAll(regex, `import$1from '/bitpacks/${packMetadata.uniqueName}/$2';`);
+        }
+        packFiles[filename.replace(packagePath, '')] = Compress(fileData);
     }
     var pack = {
         metadata: packMetadata,
@@ -259,6 +360,11 @@ async function Publish(ns, options, packagePath) {
     var uploadResultOp = new Promise((resolve, reject) => {
         xhr.onreadystatechange = () => {
             if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.responseText === '' || !xhr.responseText) {
+                    error = 'Service unreachable.';
+                    resolve(false);
+                    return;
+                }
                 var response;
                 try {
                     response = JSON.parse(xhr.responseText);
@@ -277,6 +383,7 @@ async function Publish(ns, options, packagePath) {
             }
         };
         xhr.onerror = () => {
+            error = `Service unreachable.`;
             resolve(false);
         };
     });
@@ -332,10 +439,65 @@ async function DownloadBitpack(ns, options, bitpack, version) {
     }
     DeleteBitpack(ns, options, bitpack);
     for (var filename in payload.files) {
-        await ns.write(`/bitpacks/${bitpack}/${filename}`, payload.files[filename], 'w');
+        await ns.write(`/bitpacks/${bitpack}/${filename}`, Decompress(payload.files[filename]), 'w');
     }
     Print(ns, options, `Bitpack installed ${bitpack}:${payload.metadata.version}`);
     return payload.metadata;
+}
+async function ListBitpacks(ns, options) {
+    var downloadResultOp = new Promise((resolve, reject) => {
+        var xhr = new XMLHttpRequest();
+        var apiKey = 'AIzaSyAdqErjegWi8CFRMfrCFNn6Wf9GmR1kBl0';
+        var url = `https://firestore.googleapis.com/v1/projects/bit-packer/databases/(default)/documents/bitpack-registry?key=${apiKey}`;
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState == XMLHttpRequest.DONE) {
+                var responseJson = null;
+                try {
+                    responseJson = JSON.parse(xhr.responseText);
+                    if (responseJson.error) {
+                        ns.tprint(responseJson.error);
+                        resolve(null);
+                    }
+                    else {
+                        var docs = [];
+                        for (var docIndex in responseJson.documents) {
+                            var doc = responseJson.documents[docIndex];
+                            docs.push(ConvertFirestoreObject(doc.fields));
+                        }
+                        resolve(docs);
+                    }
+                }
+                catch (syntaxError) {
+                    ns.tprint(`${syntaxError}`);
+                    resolve(null);
+                }
+            }
+        };
+        xhr.onerror = () => {
+            resolve(null);
+        };
+        xhr.open('GET', url, true);
+        xhr.send(null);
+    });
+    var result = await downloadResultOp;
+    if (result) {
+        result.sort((a, b) => {
+            if (a.uniqueName < b.uniqueName) {
+                return -1;
+            }
+            if (a.uniqueName > b.uniqueName) {
+                return 1;
+            }
+            return 0;
+        });
+        var output = '\nPackages in the bitpack registry:\n';
+        for (var entry of result) {
+            output += `    ${entry.uniqueName}: ${entry.shortDescription}\n`;
+        }
+        Print(ns, options, output);
+    }
+    else
+        PrintError(ns, `Failed to fetch registry`);
 }
 function DeleteBitpack(ns, options, bitpack) {
     var files = ns.ls(ns.getHostname(), `/bitpacks/${bitpack}`);
@@ -352,7 +514,7 @@ function DeleteAllBitpacks(ns, options) {
     for (var file of files) {
         if (!file.startsWith('/bitpacks/'))
             continue;
-        if (file.startsWith(`/bitpacks/bitpacker.js`))
+        if (file.startsWith(`/bitpacks/bp.js`))
             continue;
         if (options.verbose)
             Print(ns, options, `Deleting ${file}`);
@@ -408,6 +570,15 @@ function CheckRunning(ns, options) {
     if (running.length > 1)
         Print(ns, options, `Detected running scripts. It's recommended to kill all scripts before running bitpack.`);
 }
+async function CheckUpdate(ns, options) {
+    if (await ns.wget(BitpackerURL, '/bitpacks/bp_check.js')) {
+        var newData = ns.read('/bitpacks/bp_check.js');
+        var oldData = ns.read('/bitpacks/bp.js');
+        ns.rm('/bitpacker/bp_check.js', ns.getHostname());
+        if (newData !== oldData)
+            Print(ns, options, `A new version of bitpacker is available. Run 'bp update-bp' to upgrade.`);
+    }
+}
 function Print(ns, options, value) {
     if (options.quiet)
         return;
@@ -453,4 +624,20 @@ function ConvertFirestoreObject(json) {
         Object.keys(json).forEach((k) => (json[k] = ConvertFirestoreObject(json[k])));
     }
     return json;
+}
+export function Compress(c) {
+    var x = 'charCodeAt', b, e = {}, f = c.split(''), d = [], a = f[0], g = 256;
+    for (b = 1; b < f.length; b++)
+        (c = f[b]), null != e[a + c] ? (a += c) : (d.push(1 < a.length ? e[a] : a[x](0)), (e[a + c] = g), g++, (a = c));
+    d.push(1 < a.length ? e[a] : a[x](0));
+    for (b = 0; b < d.length; b++)
+        d[b] = String.fromCharCode(d[b]);
+    return d.join('');
+}
+export function Decompress(b) {
+    var bb = b;
+    var a, e = {}, d = b.split(''), c = d[0], f = c, g = [c], h = 256, o = h;
+    for (bb = 1; bb < d.length; bb++)
+        (a = d[bb].charCodeAt(0)), (a = h > a ? d[bb] : e[a] ? e[a] : f + c), g.push(a), (c = a.charAt(0)), (e[o] = f + c), o++, (f = a);
+    return g.join('');
 }

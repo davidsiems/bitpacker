@@ -2,7 +2,7 @@
 
 ## installation from bitburner terminal:
 
-wget "ht<span/>tps://raw.githubusercontent.com/davidsiems/bitpacker/live/command/dist/bitpacker.js" /bitpacks/bitpacker.js; alias bp="run /bitpacks/bitpacker.js"
+wget "ht<span/>tps://raw.githubusercontent.com/davidsiems/bitpacker/live/command/dist/bp.js" /bitpacks/bp.js; alias bp="run /bitpacks/bp.js";
 
 ## get started:
 
@@ -24,7 +24,8 @@ wget "ht<span/>tps://raw.githubusercontent.com/davidsiems/bitpacker/live/command
 
 ## hate it? uninstall from the terminal:
 
-    bp cleanslate; rm packages.txt; rm /bitpacks/bitpacker.js
+    bp cleanslate
+    rm packages.txt /bitpacks/bp.js;
 
 ## need help?:
 
