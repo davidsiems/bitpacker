@@ -26,7 +26,7 @@ wget "ht<span/>tps://raw.githubusercontent.com/davidsiems/bitpacker/live/command
 ## hate it? uninstall from the terminal:
 
     bp cleanslate
-    rm packages.txt /bitpacks/bp.js;
+    rm packages.txt; rm /bitpacks/bp.js;
 
 ## need help?:
 
