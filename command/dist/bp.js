@@ -1,4 +1,4 @@
-var useDev = true;
+var useDev = false;
 var baseDevURL = 'http://localhost:5001/bit-packer/us-central1';
 var baseLiveURL = 'https://us-central1-bit-packer.cloudfunctions.net';
 var UploadPackageURL = `${useDev ? baseDevURL : baseLiveURL}/UploadPackage`;
