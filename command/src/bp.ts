@@ -420,10 +420,10 @@ async function Publish(ns: NS, options: CommandOptions, packagePath: string): Pr
         }
 
         var packagePathNoLeadingSlash = packagePath.startsWith('/') ? packagePath.slice(1) : packagePath;
-        var regexString = `^import(.*)from\\s*['|"]\/*${packagePathNoLeadingSlash}(.*)['|"]$`;
+        var regexString = `import([^'"]+)(?=\\s*from)\\s*from\\s*(['"])\/*${packagePathNoLeadingSlash}(.*)(['"])`;
         var regex = RegExp(regexString, 'gm');
         if (filename.endsWith('.js') || filename.endsWith('.ns') || filename.endsWith('.script')) {
-            fileData = fileData.replaceAll(regex, `import$1from '/bitpacks/${packMetadata.uniqueName}/$2';`);
+            fileData = fileData.replaceAll(regex, `import$1from $2/bitpacks/${packMetadata.uniqueName}/$3$4;`);
         }
         packFiles[filename.replace(packagePath, '')] = Compress(fileData);
     }
