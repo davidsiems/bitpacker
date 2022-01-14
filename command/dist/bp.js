@@ -350,6 +350,8 @@ async function Publish(ns, options, packagePath) {
             delete metadata.publishKey;
             fileData = JSON.stringify(metadata, undefined, 4);
         }
+        if (filename === `${packagePath}publishing-key.txt`)
+            continue;
         var packagePathNoLeadingSlash = packagePath.startsWith('/') ? packagePath.slice(1) : packagePath;
         var regexString = `import([^'"]+)(?=\\s*from)\\s*from\\s*(['"])\/*${packagePathNoLeadingSlash}(.*)(['"])`;
         var regex = RegExp(regexString, 'gm');
