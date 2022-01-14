@@ -181,6 +181,10 @@ interface BitpackMetadata {
     longDescription?: string;
 }
 
+interface BitpackKeyFile {
+    publishKey: string;
+}
+
 interface BitpackPublishRequest {
     metadata: BitpackMetadata;
     files: Record<string, string>;
@@ -378,17 +382,22 @@ async function Create(ns: NS, options: CommandOptions, packagePath: string, bitp
         descriptiveName: '',
         shortDescription: '',
         longDescription: '',
-        tags: [],
-        publishKey: key
+        tags: []
     };
     await ns.write(`${packagePath}package.txt`, JSON.stringify(bitpack, undefined, 4));
+
+    var bitpackKey: BitpackKeyFile = {
+        publishKey: key
+    };
+    await ns.write(`${packagePath}publishing-key.txt`, JSON.stringify(bitpackKey, undefined, 4));
     Print(
         ns,
         options,
         `Successfully created ${bitpackName}.
 
-Your publishing key is ${key} and has been saved into your local package.txt.
+Your publishing key is ${key} and has been saved into your local publishing-key.txt file.
 Consider backing it up elsewhere and don't share it with anyone you don't want to be able to publish your package.
+Make sure to add publishing-key.txt to files like a .gitignore file if you're publicly publishing your package source.
 Develop your package and then publish using the 'bp publish' command.
 `
     );
@@ -411,12 +420,21 @@ async function Publish(ns: NS, options: CommandOptions, packagePath: string): Pr
     }
 
     var publishKey = packMetadata.publishKey;
-    if (!publishKey) {
-        PrintError(ns, `Publish aborted. Missing publishKey`);
-        return false;
+    if (publishKey) {
+        var keyFile: BitpackKeyFile = {
+            publishKey: publishKey
+        };
+        await ns.write(`${packagePath}publishing-key.txt`, JSON.stringify(keyFile, undefined, 4), 'w');
+
+        delete packMetadata.publishKey;
+        await ns.write(`${packagePath}package.txt`, JSON.stringify(packMetadata, undefined, 4), 'w');
     }
 
-    delete packMetadata.publishKey;
+    var publishKeyFile = LoadKeyFile(ns, `${packagePath}publishing-key.txt`);
+    if (!publishKeyFile || !publishKeyFile.publishKey) {
+        PrintError(ns, `Publish aborted. Missing publishing-key.txt`);
+        return false;
+    }
 
     var packFilenames = ns.ls(ns.getHostname(), packagePath);
     var packFiles: Record<string, string> = {};
@@ -443,7 +461,7 @@ async function Publish(ns: NS, options: CommandOptions, packagePath: string): Pr
     var pack: BitpackPublishRequest = {
         metadata: packMetadata,
         files: packFiles,
-        key: publishKey
+        key: publishKeyFile.publishKey
     };
     var packPayload = JSON.stringify(pack);
 
@@ -669,6 +687,21 @@ function LoadMetadata(ns: NS, path: string): BitpackMetadata | null {
     }
 
     return metadata;
+}
+
+function LoadKeyFile(ns: NS, path: string): BitpackKeyFile | null {
+    var keyFileJson = ns.read(path);
+    if (keyFileJson === '') return null;
+
+    var keyFile: BitpackKeyFile | null = null;
+    try {
+        keyFile = JSON.parse(keyFileJson) as BitpackKeyFile;
+    } catch (syntaxError) {
+        PrintError(ns, `Couldn't parse publishing-key.txt:\n\n${syntaxError}`);
+        return null;
+    }
+
+    return keyFile;
 }
 
 function CheckRunning(ns: NS, options: CommandOptions) {

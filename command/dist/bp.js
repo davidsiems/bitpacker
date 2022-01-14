@@ -295,14 +295,18 @@ async function Create(ns, options, packagePath, bitpackName) {
         descriptiveName: '',
         shortDescription: '',
         longDescription: '',
-        tags: [],
-        publishKey: key
+        tags: []
     };
     await ns.write(`${packagePath}package.txt`, JSON.stringify(bitpack, undefined, 4));
+    var bitpackKey = {
+        publishKey: key
+    };
+    await ns.write(`${packagePath}publishing-key.txt`, JSON.stringify(bitpackKey, undefined, 4));
     Print(ns, options, `Successfully created ${bitpackName}.
 
-Your publishing key is ${key} and has been saved into your local package.txt.
+Your publishing key is ${key} and has been saved into your local publishing-key.txt file.
 Consider backing it up elsewhere and don't share it with anyone you don't want to be able to publish your package.
+Make sure to add publishing-key.txt to files like a .gitignore file if you're publicly publishing your package source.
 Develop your package and then publish using the 'bp publish' command.
 `);
     return true;
@@ -322,11 +326,19 @@ async function Publish(ns, options, packagePath) {
         return false;
     }
     var publishKey = packMetadata.publishKey;
-    if (!publishKey) {
-        PrintError(ns, `Publish aborted. Missing publishKey`);
+    if (publishKey) {
+        var keyFile = {
+            publishKey: publishKey
+        };
+        await ns.write(`${packagePath}publishing-key.txt`, JSON.stringify(keyFile, undefined, 4), 'w');
+        delete packMetadata.publishKey;
+        await ns.write(`${packagePath}package.txt`, JSON.stringify(packMetadata, undefined, 4), 'w');
+    }
+    var publishKeyFile = LoadKeyFile(ns, `${packagePath}publishing-key.txt`);
+    if (!publishKeyFile || !publishKeyFile.publishKey) {
+        PrintError(ns, `Publish aborted. Missing publishing-key.txt`);
         return false;
     }
-    delete packMetadata.publishKey;
     var packFilenames = ns.ls(ns.getHostname(), packagePath);
     var packFiles = {};
     for (var filename of packFilenames) {
@@ -349,7 +361,7 @@ async function Publish(ns, options, packagePath) {
     var pack = {
         metadata: packMetadata,
         files: packFiles,
-        key: publishKey
+        key: publishKeyFile.publishKey
     };
     var packPayload = JSON.stringify(pack);
     var xhr = new XMLHttpRequest();
@@ -571,6 +583,20 @@ function LoadMetadata(ns, path) {
         return null;
     }
     return metadata;
+}
+function LoadKeyFile(ns, path) {
+    var keyFileJson = ns.read(path);
+    if (keyFileJson === '')
+        return null;
+    var keyFile = null;
+    try {
+        keyFile = JSON.parse(keyFileJson);
+    }
+    catch (syntaxError) {
+        PrintError(ns, `Couldn't parse publishing-key.txt:\n\n${syntaxError}`);
+        return null;
+    }
+    return keyFile;
 }
 function CheckRunning(ns, options) {
     var running = ns.ps();
