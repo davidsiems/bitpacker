@@ -2,6 +2,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { v4 as uuidv4 } from "uuid";
 import * as yup from "yup";
+import * as zlib from "zlib";
 
 admin.initializeApp();
 var firestore = admin.firestore();
@@ -112,6 +113,20 @@ interface BitpackCreateRequest {
     bitpack: string;
 }
 
+var DownloadRequestScheme = yup.object().shape({
+    bitpack: yup
+        .string()
+        .min(2, "bitpack must be at least 2 characters.")
+        .max(64, "bitpack cannot be longer than 64 characters.")
+        .required("Missing bitpack field"),
+    version: yup.string().required(),
+});
+
+interface BitpackDownloadRequest {
+    bitpack: string;
+    version: string;
+}
+
 interface BitpackManifest {
     key: string;
     nextVersion: number;
@@ -122,6 +137,12 @@ interface BitpackRegistry {
     shortDescription: string;
     author?: string;
     tags: string[];
+}
+
+interface Bitpack {
+    metadata: BitpackMetadata;
+    files: Record<string, string>;
+    legacyCompression?: boolean;
 }
 
 export const UploadPackage = functions
@@ -164,6 +185,15 @@ export const UploadPackage = functions
             payload.metadata.uniqueName
         );
 
+        var compressedFiles: Record<string, string> = {};
+        for (var file in payload.files) {
+            compressedFiles[file] = zlib
+                .deflateSync(payload.files[file], {
+                    level: zlib.constants.Z_BEST_COMPRESSION,
+                })
+                .toString("base64");
+        }
+
         var version = await firestore.runTransaction(async (t) => {
             var manifestDoc = await t.get(manifestDocRef);
             var manifest = manifestDoc.data() as BitpackManifest;
@@ -177,9 +207,9 @@ export const UploadPackage = functions
             );
 
             var publishedVersion = manifest.nextVersion;
-            var bitpack = {
+            var bitpack: Bitpack = {
                 metadata: { ...payload.metadata, version: publishedVersion },
-                files: payload.files,
+                files: compressedFiles,
             };
 
             t.set(bitpackDoc, bitpack);
@@ -244,3 +274,67 @@ export const CreatePackage = functions
             response.send({ ok: true, key: publishKey });
         }
     });
+
+export const DownloadPackage = functions
+    .runWith({
+        memory: "128MB",
+    })
+    .https.onRequest(async (request, response) => {
+        var payload: BitpackDownloadRequest;
+        try {
+            payload = (await DownloadRequestScheme.validate(request.body, {
+                stripUnknown: true,
+            })) as BitpackDownloadRequest;
+        } catch (error) {
+            response.send({ error: (error as any).message });
+            return;
+        }
+
+        var bitpackCollection = firestore.collection("bitpacks");
+        var bitpackDocRef = bitpackCollection.doc(
+            `${payload.bitpack}:${payload.version}`
+        );
+        var bitpackDoc = await bitpackDocRef.get();
+        if (!bitpackDoc.exists) {
+            response.send({
+                error: `${payload.bitpack}:${payload.version} not found.`,
+            });
+            return;
+        }
+
+        var bitpack = bitpackDoc.data() as Bitpack;
+        if (bitpack.legacyCompression) {
+            for (var file in bitpack.files) {
+                bitpack.files[file] = Decompress_v1(bitpack.files[file]);
+            }
+        } else {
+            for (var file in bitpack.files) {
+                bitpack.files[file] = zlib
+                    .inflateSync(Buffer.from(bitpack.files[file], "base64"))
+                    .toString();
+            }
+        }
+
+        response.send({ ok: true, bitpack });
+    });
+
+export function Decompress_v1(b: string) {
+    var bb: any = b;
+    var a: any,
+        e: any = {},
+        d: any = b.split(""),
+        c: any = d[0],
+        f: any = c,
+        g: any = [c],
+        h: any = 256,
+        o: any = h;
+    for (bb = 1; bb < d.length; bb++)
+        (a = d[bb].charCodeAt(0)),
+            (a = h > a ? d[bb] : e[a] ? e[a] : f + c),
+            g.push(a),
+            (c = a.charAt(0)),
+            (e[o] = f + c),
+            o++,
+            (f = a);
+    return g.join("");
+}

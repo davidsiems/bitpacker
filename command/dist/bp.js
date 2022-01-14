@@ -3,6 +3,7 @@ var baseDevURL = 'http://localhost:5001/bit-packer/us-central1';
 var baseLiveURL = 'https://us-central1-bit-packer.cloudfunctions.net';
 var UploadPackageURL = `${useDev ? baseDevURL : baseLiveURL}/UploadPackage`;
 var CreatePackageURL = `${useDev ? baseDevURL : baseLiveURL}/CreatePackage`;
+var DownloadPackageURL = `${useDev ? baseDevURL : baseLiveURL}/DownloadPackage`;
 var BitpackerURL = `https://raw.githubusercontent.com/davidsiems/bitpacker/live/command/dist/bp.js?${Date.now()}`;
 var Commands = {
     browse: {
@@ -343,7 +344,7 @@ async function Publish(ns, options, packagePath) {
         if (filename.endsWith('.js') || filename.endsWith('.ns') || filename.endsWith('.script')) {
             fileData = fileData.replaceAll(regex, `import$1from $2/bitpacks/${packMetadata.uniqueName}/$3$4;`);
         }
-        packFiles[filename.replace(packagePath, '')] = Compress(fileData);
+        packFiles[filename.replace(packagePath, '')] = fileData;
     }
     var pack = {
         metadata: packMetadata,
@@ -405,20 +406,27 @@ function Manual(ns, options, bitpack) {
     Print(ns, options, `\n${manual}`);
 }
 async function DownloadBitpack(ns, options, bitpack, version) {
+    var request = {
+        bitpack: bitpack,
+        version: version
+    };
+    var requestPayload = JSON.stringify(request);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', DownloadPackageURL, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.send(requestPayload);
+    var error = '';
     var downloadResultOp = new Promise((resolve, reject) => {
-        var xhr = new XMLHttpRequest();
-        var apiKey = 'AIzaSyAdqErjegWi8CFRMfrCFNn6Wf9GmR1kBl0';
-        var doc = `bitpacks/${bitpack}%3A${version}`;
-        var url = `https://firestore.googleapis.com/v1beta1/projects/bit-packer/databases/(default)/documents/${doc}?key=${apiKey}`;
         xhr.onreadystatechange = function () {
             if (xhr.readyState == XMLHttpRequest.DONE) {
-                var responseJson = null;
                 try {
-                    responseJson = JSON.parse(xhr.responseText);
-                    if (responseJson.error)
+                    var responseJson = JSON.parse(xhr.responseText);
+                    if (responseJson.error) {
+                        error = responseJson.error;
                         resolve(null);
+                    }
                     else {
-                        resolve(ConvertFirestoreObject(responseJson).fields);
+                        resolve(responseJson.bitpack);
                     }
                 }
                 catch (syntaxError) {
@@ -427,19 +435,18 @@ async function DownloadBitpack(ns, options, bitpack, version) {
             }
         };
         xhr.onerror = () => {
+            error = `Service unreachable.`;
             resolve(null);
         };
-        xhr.open('GET', url, true);
-        xhr.send(null);
     });
     var payload = await downloadResultOp;
     if (!payload) {
-        PrintError(ns, `Failed to download ${bitpack}:${version}`);
+        PrintError(ns, `Failed to download ${bitpack}:${version}\n    ${error}`);
         return null;
     }
     DeleteBitpack(ns, options, bitpack);
     for (var filename in payload.files) {
-        await ns.write(`/bitpacks/${bitpack}/${filename}`, Decompress(payload.files[filename]), 'w');
+        await ns.write(`/bitpacks/${bitpack}/${filename}`, payload.files[filename], 'w');
     }
     Print(ns, options, `Bitpack installed ${bitpack}:${payload.metadata.version}`);
     return payload.metadata;
@@ -624,20 +631,4 @@ function ConvertFirestoreObject(json) {
         Object.keys(json).forEach((k) => (json[k] = ConvertFirestoreObject(json[k])));
     }
     return json;
-}
-export function Compress(c) {
-    var x = 'charCodeAt', b, e = {}, f = c.split(''), d = [], a = f[0], g = 256;
-    for (b = 1; b < f.length; b++)
-        (c = f[b]), null != e[a + c] ? (a += c) : (d.push(1 < a.length ? e[a] : a[x](0)), (e[a + c] = g), g++, (a = c));
-    d.push(1 < a.length ? e[a] : a[x](0));
-    for (b = 0; b < d.length; b++)
-        d[b] = String.fromCharCode(d[b]);
-    return d.join('');
-}
-export function Decompress(b) {
-    var bb = b;
-    var a, e = {}, d = b.split(''), c = d[0], f = c, g = [c], h = 256, o = h;
-    for (bb = 1; bb < d.length; bb++)
-        (a = d[bb].charCodeAt(0)), (a = h > a ? d[bb] : e[a] ? e[a] : f + c), g.push(a), (c = a.charAt(0)), (e[o] = f + c), o++, (f = a);
-    return g.join('');
 }
