@@ -150,6 +150,15 @@ export const UploadPackage = functions
         memory: "128MB",
     })
     .https.onRequest(async (request, response) => {
+        response.set("Access-Control-Allow-Origin", "*");
+        if (request.method === "OPTIONS") {
+            response.set("Access-Control-Allow-Methods", "POST");
+            response.set("Access-Control-Allow-Headers", "Content-Type");
+            response.set("Access-Control-Max-Age", "3600");
+            response.status(204).send("");
+            return;
+        }
+
         var payload: BitpackPublishRequest;
         try {
             payload = (await PublishRequestSchema.validate(request.body, {
@@ -239,6 +248,15 @@ export const CreatePackage = functions
         memory: "128MB",
     })
     .https.onRequest(async (request, response) => {
+        response.set("Access-Control-Allow-Origin", "*");
+        if (request.method === "OPTIONS") {
+            response.set("Access-Control-Allow-Methods", "POST");
+            response.set("Access-Control-Allow-Headers", "Content-Type");
+            response.set("Access-Control-Max-Age", "3600");
+            response.status(204).send("");
+            return;
+        }
+
         var payload: BitpackCreateRequest;
         try {
             payload = (await CreateRequestSchema.validate(request.body, {
@@ -280,6 +298,15 @@ export const DownloadPackage = functions
         memory: "128MB",
     })
     .https.onRequest(async (request, response) => {
+        response.set("Access-Control-Allow-Origin", "*");
+        if (request.method === "OPTIONS") {
+            response.set("Access-Control-Allow-Methods", "POST");
+            response.set("Access-Control-Allow-Headers", "Content-Type");
+            response.set("Access-Control-Max-Age", "3600");
+            response.status(204).send("");
+            return;
+        }
+
         var payload: BitpackDownloadRequest;
         try {
             payload = (await DownloadRequestScheme.validate(request.body, {
