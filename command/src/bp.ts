@@ -185,6 +185,7 @@ interface BitpackMetadata {
     descriptiveName?: string;
     longDescription?: string;
     aliases?: Record<string, string>;
+    welcome?: string;
 }
 
 interface BitpackKeyFile {
@@ -590,6 +591,8 @@ async function DownloadBitpack(ns: NS, options: CommandOptions, bitpack: string,
     }
 
     Print(ns, options, `Bitpack installed ${bitpack}:${payload.metadata.version}`);
+    if (payload.metadata.welcome) Print(ns, options, payload.metadata.welcome);
+
     if (payload.metadata.aliases) {
         var manifest = LoadManifest(ns);
         var alias = !(manifest?.options && manifest.options[bitpack] && manifest.options[bitpack].noAlias);

@@ -84,6 +84,7 @@ var PublishRequestSchema = yup.object().shape({
                 }
                 return schema;
             }),
+            welcome: yup.string().max(512).optional(),
         })
         .required("Missing metadata field."),
     files: yup.lazy((value) => {

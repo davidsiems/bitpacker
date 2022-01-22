@@ -50,12 +50,13 @@ also include a **manual.txt** file which will be displayed to users when the **b
 
 When you create a package you'll end up with a package.txt file. This file contains metadata that describes your package. You should edit it with whatever information you feel is relevant.
 
-    "uniqueName": "some-package", // required - The name of your package (generally don't edit this)
-    "author": "your-name",        // optional
-    "descriptiveName": "",        // optional
-    "shortDescription": "",       // required
-    "longDescription": "",        // optional
-    "tags": [],                   // optional
-    "aliases": {                  // optional - bp will add/remove these automatically
+    "uniqueName": "some-package",  // required - The name of your package (generally don't edit this)
+    "author": "your-name",         // optional
+    "descriptiveName": "",         // optional
+    "shortDescription": "",        // required
+    "longDescription": "",         // optional
+    "tags": [],                    // optional
+    "aliases": {                   // optional - bp will add/remove these automatically
         "aliasName": "some-script-in-your-package.js"
     }
+    "welcome": "A welcome message" // optional - bp will print this out on install
