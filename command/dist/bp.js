@@ -588,7 +588,7 @@ function DeleteAllBitpacks(ns, options) {
             continue;
         if (file.startsWith(`/bitpacks/bp.js`))
             continue;
-        installedBitpacks[file.split('/')[1]] = true;
+        installedBitpacks[file.split('/')[2]] = true;
     }
     for (var bitpack in installedBitpacks)
         DeleteBitpack(ns, options, bitpack);

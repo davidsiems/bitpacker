@@ -702,7 +702,7 @@ function DeleteAllBitpacks(ns: NS, options: CommandOptions) {
     for (var file of files) {
         if (!file.startsWith('/bitpacks/')) continue;
         if (file.startsWith(`/bitpacks/bp.js`)) continue;
-        installedBitpacks[file.split('/')[1]] = true;
+        installedBitpacks[file.split('/')[2]] = true;
     }
 
     for (var bitpack in installedBitpacks) DeleteBitpack(ns, options, bitpack);
