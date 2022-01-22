@@ -17,6 +17,7 @@ interface BitpackMetadata {
     author?: string;
     descriptiveName?: string;
     longDescription?: string;
+    aliases?: Record<string, string>;
 }
 
 var BitpackTags: string[] = [
@@ -67,6 +68,22 @@ var PublishRequestSchema = yup.object().shape({
                     "longDescription cannot be longer than 512 characters."
                 )
                 .optional(),
+            aliases: yup.lazy((value) => {
+                var schema = yup.object().optional();
+                switch (typeof value) {
+                    case "object": {
+                        for (var key in value) {
+                            if (typeof key !== "string") continue;
+                            var field: any = {};
+                            var regex = new RegExp("^.+.[js|ns|script]+$");
+                            field[key] = yup.string().matches(regex).required();
+                            schema = schema.shape(field);
+                        }
+                        break;
+                    }
+                }
+                return schema;
+            }),
         })
         .required("Missing metadata field."),
     files: yup.lazy((value) => {

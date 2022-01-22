@@ -17,7 +17,8 @@ var Commands = {
     add: {
         command: add,
         help: `    bp add package-name                      // Installs latest version of the package 'package-name'
-    bp add package-name version              // Installs the specified version of 'package-name'`,
+    bp add package-name version              // Installs the specified version of 'package-name'
+    bp add package-name --no-alias           // Disables alias installation for this package`,
         validate: (args: string[]) => {
             if (args.length === 0 || args.length > 2) return false;
             return true;
@@ -91,11 +92,15 @@ var Commands = {
 export async function main(ns: NS) {
     var flags = ns.flags([
         ['quiet', false],
-        ['q', false]
+        ['q', false],
+        ['verbose', false],
+        ['no-alias', false]
     ]);
 
     var options: CommandOptions = {
-        quiet: flags.quiet || flags.q
+        quiet: flags.quiet || flags.q,
+        verbose: flags.verbose,
+        noAlias: flags['no-alias']
     };
 
     await CheckUpdate(ns, options);
@@ -179,6 +184,7 @@ interface BitpackMetadata {
     author?: string;
     descriptiveName?: string;
     longDescription?: string;
+    aliases?: Record<string, string>;
 }
 
 interface BitpackKeyFile {
@@ -223,8 +229,13 @@ interface Bitpack {
     files: Record<string, string>;
 }
 
+interface BitpackPackageOptions {
+    noAlias?: boolean;
+}
+
 interface BitpackManifest {
     bitpacks: Record<string, string>;
+    options?: Record<string, BitpackPackageOptions>;
 }
 
 interface BitpackRegistry {
@@ -237,6 +248,7 @@ interface BitpackRegistry {
 export interface CommandOptions {
     quiet?: boolean;
     verbose?: boolean;
+    noAlias?: boolean;
 }
 
 export async function BitpackInstall(ns: NS, options: CommandOptions, latest: boolean): Promise<boolean> {
@@ -261,6 +273,7 @@ export async function BitpackInstall(ns: NS, options: CommandOptions, latest: bo
     await SaveManifest(ns, manifest);
     if (failures > 0) Print(ns, options, `Bitpack Failed to install ${failures} package${failures === 1 ? 's' : ''}`);
     else Print(ns, options, `Bitpack installed ${packages} package${packages === 1 ? 's' : ''}`);
+
     return failures === 0;
 }
 
@@ -291,6 +304,11 @@ async function BitpackAdd(ns: NS, options: CommandOptions, bitpack: string, vers
             return false;
         } else {
             manifest.bitpacks[bitpack] = `${metadata.version}`;
+            if (options.noAlias) {
+                if (!manifest.options) manifest.options = {};
+                if (!manifest.options[bitpack]) manifest.options[bitpack] = {};
+                manifest.options[bitpack].noAlias = true;
+            }
             await SaveManifest(ns, manifest);
         }
     }
@@ -302,12 +320,14 @@ async function BitpackRemove(ns: NS, options: CommandOptions, bitpack: string) {
     var manifest = await RequireManifest(ns);
     if (!manifest) return;
 
+    await DeleteBitpack(ns, options, bitpack);
+
     var version = manifest.bitpacks[bitpack];
     if (version) {
         delete manifest.bitpacks[bitpack];
+        if (manifest.options && manifest.options[bitpack]) delete manifest.options[bitpack];
         await SaveManifest(ns, manifest);
     }
-    DeleteBitpack(ns, options, bitpack);
     Print(ns, options, `Bitpack removed ${bitpack}:${version ? version : ''}`);
 }
 
@@ -382,7 +402,8 @@ async function Create(ns: NS, options: CommandOptions, packagePath: string, bitp
         descriptiveName: '',
         shortDescription: '',
         longDescription: '',
-        tags: []
+        tags: [],
+        aliases: {}
     };
     await ns.write(`${packagePath}package.txt`, JSON.stringify(bitpack, undefined, 4));
 
@@ -563,13 +584,40 @@ async function DownloadBitpack(ns: NS, options: CommandOptions, bitpack: string,
         return null;
     }
 
-    DeleteBitpack(ns, options, bitpack);
+    await DeleteBitpack(ns, options, bitpack);
     for (var filename in payload.files) {
         await ns.write(`/bitpacks/${bitpack}/${filename}`, payload.files[filename], 'w');
     }
 
     Print(ns, options, `Bitpack installed ${bitpack}:${payload.metadata.version}`);
+    if (payload.metadata.aliases) {
+        var manifest = LoadManifest(ns);
+        var alias = !(manifest?.options && manifest.options[bitpack] && manifest.options[bitpack].noAlias);
+        if (alias) {
+            for (var aliasName in payload.metadata.aliases) {
+                var aliasPath = `/bitpacks/${bitpack}/${payload.metadata.aliases[aliasName]}`;
+                InstallAlias(aliasName, aliasPath);
+            }
+        }
+    }
     return payload.metadata;
+}
+
+function InstallAlias(aliasName: string, aliasPath: string) {
+    RunTerminalCommand(`alias ${aliasName}="run ${aliasPath}"`);
+}
+
+function UninstallAlias(aliasName: string) {
+    RunTerminalCommand(`unalias ${aliasName}`);
+}
+
+function RunTerminalCommand(command: string) {
+    const doc = eval('document');
+    const terminalInput = doc.getElementById('terminal-input');
+    terminalInput.value = command;
+    const handler = Object.keys(terminalInput)[1];
+    terminalInput[handler].onChange({ target: terminalInput });
+    terminalInput[handler].onKeyDown({ keyCode: 13, preventDefault: () => null });
 }
 
 async function ListBitpacks(ns: NS, options: CommandOptions) {
@@ -626,7 +674,17 @@ async function ListBitpacks(ns: NS, options: CommandOptions) {
     } else PrintError(ns, `Failed to fetch registry`);
 }
 
-function DeleteBitpack(ns: NS, options: CommandOptions, bitpack: string) {
+async function DeleteBitpack(ns: NS, options: CommandOptions, bitpack: string): Promise<void> {
+    var manifest = LoadManifest(ns);
+    if (!manifest || !manifest.options || !manifest.options[bitpack] || !manifest.options[bitpack].noAlias) {
+        var metadata = LoadMetadata(ns, `/bitpacks/${bitpack}/package.txt`);
+        if (metadata && metadata.aliases) {
+            for (var aliasName in metadata.aliases) {
+                UninstallAlias(aliasName);
+            }
+        }
+    }
+
     var files = ns.ls(ns.getHostname(), `/bitpacks/${bitpack}`);
     for (var file of files) {
         if (!file.startsWith(`/bitpacks/${bitpack}`)) continue;
@@ -637,12 +695,14 @@ function DeleteBitpack(ns: NS, options: CommandOptions, bitpack: string) {
 
 function DeleteAllBitpacks(ns: NS, options: CommandOptions) {
     var files = ns.ls(ns.getHostname(), '/bitpacks/');
+    var installedBitpacks: Record<string, boolean> = {};
     for (var file of files) {
         if (!file.startsWith('/bitpacks/')) continue;
         if (file.startsWith(`/bitpacks/bp.js`)) continue;
-        if (options.verbose) Print(ns, options, `Deleting ${file}`);
-        ns.rm(file);
+        installedBitpacks[file.split('/')[1]] = true;
     }
+
+    for (var bitpack in installedBitpacks) DeleteBitpack(ns, options, bitpack);
 }
 
 function LoadManifest(ns: NS): BitpackManifest | null | undefined {
@@ -659,7 +719,8 @@ function LoadManifest(ns: NS): BitpackManifest | null | undefined {
 
 async function CreateManifest(ns: NS): Promise<BitpackManifest> {
     var manifest: BitpackManifest = {
-        bitpacks: {}
+        bitpacks: {},
+        options: {}
     };
     await SaveManifest(ns, manifest);
     return manifest;
@@ -715,7 +776,7 @@ async function CheckUpdate(ns: NS, options: CommandOptions) {
     if (await ns.wget(BitpackerURL, '/bitpacks/bp_check.js')) {
         var newData = ns.read('/bitpacks/bp_check.js');
         var oldData = ns.read('/bitpacks/bp.js');
-        ns.rm('/bitpacker/bp_check.js', ns.getHostname());
+        ns.rm('/bitpacks/bp_check.js', ns.getHostname());
         if (newData !== oldData) Print(ns, options, `A new version of bitpacker is available. Run 'bp update-bp' to upgrade.`);
     }
 }

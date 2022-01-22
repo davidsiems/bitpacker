@@ -45,3 +45,17 @@ Bitpacker does not manage dependencies between packages and it's recommended tha
 
 Packages must include a **package.txt** file which you can edit to add additional metadata for your package. You may also may
 also include a **manual.txt** file which will be displayed to users when the **bp man** command is run.
+
+## package.txt
+
+When you create a package you'll end up with a package.txt file. This file contains metadata that describes your package. You should edit it with whatever information you feel is relevant.
+
+    "uniqueName": "some-package", // required - The name of your package (generally don't edit this)
+    "author": "your-name",        // optional
+    "descriptiveName": "",        // optional
+    "shortDescription": "",       // required
+    "longDescription": "",        // optional
+    "tags": [],                   // optional
+    "aliases": {                  // optional - bp will add/remove these automatically
+        "aliasName": "some-script-in-your-package.js"
+    }
