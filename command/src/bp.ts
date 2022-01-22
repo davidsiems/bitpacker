@@ -103,12 +103,12 @@ export async function main(ns: NS) {
         noAlias: flags['no-alias']
     };
 
-    await CheckUpdate(ns, options);
-
     var [commandKey, ...args] = flags._;
     var command = Commands[commandKey as keyof typeof Commands];
     if (!command) command = Commands.help;
     if (!command.validate(args)) command = Commands.help;
+
+    if (commandKey !== 'update-bp') await CheckUpdate(ns, options);
     await command.command(ns, options, args);
 }
 

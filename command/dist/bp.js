@@ -99,13 +99,14 @@ export async function main(ns) {
         verbose: flags.verbose,
         noAlias: flags['no-alias']
     };
-    await CheckUpdate(ns, options);
     var [commandKey, ...args] = flags._;
     var command = Commands[commandKey];
     if (!command)
         command = Commands.help;
     if (!command.validate(args))
         command = Commands.help;
+    if (commandKey !== 'update-bp')
+        await CheckUpdate(ns, options);
     await command.command(ns, options, args);
 }
 async function update_bp(ns, options, args) {

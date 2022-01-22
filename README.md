@@ -2,7 +2,7 @@
 
 ## installation from bitburner terminal:
 
-wget "ht<span/>tps://raw.githubusercontent.com/davidsiems/bitpacker/live/command/dist/bp.js" /bitpacks/bp.js; alias bp="run /bitpacks/bp.js";
+    wget "https://raw.githubusercontent.com/davidsiems/bitpacker/live/command/dist/bp.js" /bitpacks/bp.js; alias bp="run /bitpacks/bp.js";
 
 ## get started:
 
@@ -12,6 +12,7 @@ wget "ht<span/>tps://raw.githubusercontent.com/davidsiems/bitpacker/live/command
     bp list                      // lists installed packages and their versions
     bp install                   // makes /bitpacks reflect what's in the manifest (packages.txt)
     bp cleanslate                // uninstalls all packages and resets packages.txt
+    bp update-bp                 // updates bp to the latest available version
 
 ## develop a package:
 
